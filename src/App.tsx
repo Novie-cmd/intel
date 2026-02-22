@@ -84,26 +84,54 @@ export default function App() {
       }
 
       const genAI = new GoogleGenAI({ apiKey });
-      const response = await genAI.models.generateContent({
-        model: "gemini-3.1-pro-preview",
-        contents: `Analyze this phone number metadata:
-          Number: ${parsed.number}
-          Country: ${parsed.country}
-          Carrier: ${parsed.carrier || 'Unknown'}
-          
-          Provide a technical intelligence report in Indonesian. 
-          Return ONLY a JSON object with this structure:
-          {
-            "summary": "Short overview",
-            "regionDetails": "Specific details about the registration area",
-            "carrierInfo": "Information about the network provider",
-            "securityRisk": "Low" | "Medium" | "High",
-            "recommendations": ["tip 1", "tip 2", "tip 3"]
-          }`,
-        config: {
-          responseMimeType: "application/json",
-        }
-      });
+      
+      // Try Flash model first (better quota)
+      let response;
+      try {
+        response = await genAI.models.generateContent({
+          model: "gemini-3-flash-preview",
+          contents: `Analyze this phone number metadata:
+            Number: ${parsed.number}
+            Country: ${parsed.country}
+            Carrier: ${parsed.carrier || 'Unknown'}
+            
+            Provide a technical intelligence report in Indonesian. 
+            Return ONLY a JSON object with this structure:
+            {
+              "summary": "Short overview",
+              "regionDetails": "Specific details about the registration area",
+              "carrierInfo": "Information about the network provider",
+              "securityRisk": "Low" | "Medium" | "High",
+              "recommendations": ["tip 1", "tip 2", "tip 3"]
+            }`,
+          config: {
+            responseMimeType: "application/json",
+          }
+        });
+      } catch (flashErr: any) {
+        console.warn("Flash model failed, trying Pro fallback...", flashErr);
+        // Fallback to Pro if Flash fails (though usually it's the other way around)
+        response = await genAI.models.generateContent({
+          model: "gemini-3.1-pro-preview",
+          contents: `Analyze this phone number metadata:
+            Number: ${parsed.number}
+            Country: ${parsed.country}
+            Carrier: ${parsed.carrier || 'Unknown'}
+            
+            Provide a technical intelligence report in Indonesian. 
+            Return ONLY a JSON object with this structure:
+            {
+              "summary": "Short overview",
+              "regionDetails": "Specific details about the registration area",
+              "carrierInfo": "Information about the network provider",
+              "securityRisk": "Low" | "Medium" | "High",
+              "recommendations": ["tip 1", "tip 2", "tip 3"]
+            }`,
+          config: {
+            responseMimeType: "application/json",
+          }
+        });
+      }
 
       const result = JSON.parse(response.text || '{}');
       
@@ -132,7 +160,7 @@ export default function App() {
               <Radar className="w-5 h-5 text-emerald-500 animate-pulse" />
             </div>
             <h1 className="text-lg font-bold tracking-tighter uppercase">GeoNumber <span className="text-emerald-500">Intel</span></h1>
-            <span className="text-[8px] bg-white/10 px-1 rounded text-white/40">v2.5.3</span>
+            <span className="text-[8px] bg-white/10 px-1 rounded text-white/40">v2.5.4</span>
           </div>
           <div className="flex items-center gap-4 text-[10px] uppercase tracking-widest text-white/40">
             <div className="flex items-center gap-2">
