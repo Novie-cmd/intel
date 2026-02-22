@@ -34,6 +34,13 @@ export default function App() {
   const [scanProgress, setScanProgress] = useState(0);
   const [manualKey, setManualKey] = useState('');
   const [showKeyInput, setShowKeyInput] = useState(false);
+  const [hasGPS, setHasGPS] = useState(false);
+
+  useEffect(() => {
+    if ("geolocation" in navigator) {
+      navigator.geolocation.getCurrentPosition(() => setHasGPS(true), () => setHasGPS(false));
+    }
+  }, []);
 
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -57,6 +64,20 @@ export default function App() {
   const startScan = async (parsed: any) => {
     setIsScanning(true);
     setScanProgress(0);
+
+    // Get user location for better accuracy
+    let userLocation = null;
+    try {
+      const position = await new Promise<GeolocationPosition>((resolve, reject) => {
+        navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 5000 });
+      });
+      userLocation = {
+        latitude: position.coords.latitude,
+        longitude: position.coords.longitude
+      };
+    } catch (e) {
+      console.warn("Could not get user location:", e);
+    }
 
     // Simulate scanning progress
     const interval = setInterval(() => {
@@ -93,7 +114,7 @@ export default function App() {
           Carrier: ${parsed.carrier || 'Unknown'}
           
           Provide a technical intelligence report in Indonesian. 
-          Include specific geographic coordinates or area names if possible.
+          Use the provided user location as a reference point to find the most accurate registration area or nearby infrastructure related to this number.
           Return ONLY a JSON object with this structure:
           {
             "summary": "Short overview",
@@ -106,7 +127,11 @@ export default function App() {
           }`,
         config: {
           tools: [{ googleMaps: {} }],
-          // Note: responseMimeType: "application/json" is NOT allowed with googleMaps tool
+          toolConfig: userLocation ? {
+            retrievalConfig: {
+              latLng: userLocation
+            }
+          } : undefined
         }
       });
 
@@ -149,7 +174,7 @@ export default function App() {
               <Radar className="w-5 h-5 text-emerald-500 animate-pulse" />
             </div>
             <h1 className="text-lg font-bold tracking-tighter uppercase">GeoNumber <span className="text-emerald-500">Intel</span></h1>
-            <span className="text-[8px] bg-white/10 px-1 rounded text-white/40">v2.5.4</span>
+            <span className="text-[8px] bg-white/10 px-1 rounded text-white/40">v2.5.5</span>
           </div>
           <div className="flex items-center gap-4 text-[10px] uppercase tracking-widest text-white/40">
             <div className="flex items-center gap-2">
@@ -161,6 +186,10 @@ export default function App() {
             <div className="flex items-center gap-2">
               <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
               System Active
+            </div>
+            <div className="flex items-center gap-2">
+              <div className={cn("w-1.5 h-1.5 rounded-full animate-pulse", hasGPS ? "bg-blue-500" : "bg-white/20")} />
+              {hasGPS ? "GPS Precision" : "GPS Offline"}
             </div>
           </div>
         </div>
