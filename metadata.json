@@ -1,0 +1,5 @@
+{
+  "name": "GeoNumber Intel",
+  "description": "Aplikasi intelijen nomor telepon untuk menganalisis lokasi pendaftaran, operator, dan informasi regional.",
+  "requestFramePermissions": ["geolocation"]
+}
