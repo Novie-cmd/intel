@@ -68,10 +68,15 @@ export default function App() {
     }, 300);
 
     try {
-      const apiKey = process.env.GEMINI_API_KEY || (process.env as any).USER_API_KEY;
+      // Try to get key from multiple sources
+      const apiKey = 
+        process.env.GEMINI_API_KEY || 
+        (process.env as any).USER_API_KEY || 
+        (import.meta as any).env?.VITE_GEMINI_API_KEY ||
+        (window as any).GEMINI_API_KEY;
       
       if (!apiKey || apiKey === 'MY_GEMINI_API_KEY' || apiKey === '') {
-        throw new Error('API Key belum aktif. Pastikan Anda sudah klik "Apply changes" di panel Secrets. Jika masih gagal, tambahkan Secret baru dengan nama USER_API_KEY.');
+        throw new Error('API Key belum aktif (Status: NO_KEY). Pastikan Anda sudah klik "Apply changes" di panel Secrets. Jika masih gagal, tambahkan Secret baru dengan nama USER_API_KEY.');
       }
 
       const genAI = new GoogleGenAI({ apiKey });
@@ -123,8 +128,15 @@ export default function App() {
               <Radar className="w-5 h-5 text-emerald-500 animate-pulse" />
             </div>
             <h1 className="text-lg font-bold tracking-tighter uppercase">GeoNumber <span className="text-emerald-500">Intel</span></h1>
+            <span className="text-[8px] bg-white/10 px-1 rounded text-white/40">v2.5.2</span>
           </div>
           <div className="flex items-center gap-4 text-[10px] uppercase tracking-widest text-white/40">
+            <div className="flex items-center gap-2">
+              <span className="opacity-50">Debug:</span>
+              <span className={cn((process.env.GEMINI_API_KEY || (process.env as any).USER_API_KEY) ? "text-emerald-500" : "text-red-500")}>
+                {(process.env.GEMINI_API_KEY || (process.env as any).USER_API_KEY) ? "KEY_OK" : "NO_KEY"}
+              </span>
+            </div>
             <div className="flex items-center gap-2">
               <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
               System Active
