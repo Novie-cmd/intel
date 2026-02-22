@@ -70,7 +70,6 @@ export default function App() {
     }, 300);
 
     try {
-      // Try to get key from multiple sources
       const apiKey = 
         manualKey ||
         process.env.GEMINI_API_KEY || 
@@ -85,58 +84,48 @@ export default function App() {
 
       const genAI = new GoogleGenAI({ apiKey });
       
-      // Try Flash model first (better quota)
-      let response;
-      try {
-        response = await genAI.models.generateContent({
-          model: "gemini-3-flash-preview",
-          contents: `Analyze this phone number metadata:
-            Number: ${parsed.number}
-            Country: ${parsed.country}
-            Carrier: ${parsed.carrier || 'Unknown'}
-            
-            Provide a technical intelligence report in Indonesian. 
-            Return ONLY a JSON object with this structure:
-            {
-              "summary": "Short overview",
-              "regionDetails": "Specific details about the registration area",
-              "carrierInfo": "Information about the network provider",
-              "securityRisk": "Low" | "Medium" | "High",
-              "recommendations": ["tip 1", "tip 2", "tip 3"]
-            }`,
-          config: {
-            responseMimeType: "application/json",
-          }
-        });
-      } catch (flashErr: any) {
-        console.warn("Flash model failed, trying Pro fallback...", flashErr);
-        // Fallback to Pro if Flash fails (though usually it's the other way around)
-        response = await genAI.models.generateContent({
-          model: "gemini-3.1-pro-preview",
-          contents: `Analyze this phone number metadata:
-            Number: ${parsed.number}
-            Country: ${parsed.country}
-            Carrier: ${parsed.carrier || 'Unknown'}
-            
-            Provide a technical intelligence report in Indonesian. 
-            Return ONLY a JSON object with this structure:
-            {
-              "summary": "Short overview",
-              "regionDetails": "Specific details about the registration area",
-              "carrierInfo": "Information about the network provider",
-              "securityRisk": "Low" | "Medium" | "High",
-              "recommendations": ["tip 1", "tip 2", "tip 3"]
-            }`,
-          config: {
-            responseMimeType: "application/json",
-          }
-        });
-      }
+      // Use Gemini 2.5 Flash for Maps Grounding support
+      const response = await genAI.models.generateContent({
+        model: "gemini-2.5-flash",
+        contents: `Analyze this phone number for geographic intelligence:
+          Number: ${parsed.number}
+          Country: ${parsed.country}
+          Carrier: ${parsed.carrier || 'Unknown'}
+          
+          Provide a technical intelligence report in Indonesian. 
+          Include specific geographic coordinates or area names if possible.
+          Return ONLY a JSON object with this structure:
+          {
+            "summary": "Short overview",
+            "regionDetails": "Specific details about the registration area",
+            "carrierInfo": "Information about the network provider",
+            "securityRisk": "Low" | "Medium" | "High",
+            "locationName": "City, Province, Country",
+            "coordinates": {"lat": 0, "lng": 0},
+            "recommendations": ["tip 1", "tip 2", "tip 3"]
+          }`,
+        config: {
+          tools: [{ googleMaps: {} }],
+          // Note: responseMimeType: "application/json" is NOT allowed with googleMaps tool
+        }
+      });
 
-      const result = JSON.parse(response.text || '{}');
+      // Since we can't use responseMimeType: "application/json" with googleMaps, 
+      // we need to extract JSON from the text response
+      const text = response.text || '';
+      const jsonMatch = text.match(/\{[\s\S]*\}/);
+      const result = jsonMatch ? JSON.parse(jsonMatch[0]) : {};
       
+      // Extract Maps links if available
+      const mapsLinks = response.candidates?.[0]?.groundingMetadata?.groundingChunks
+        ?.filter((chunk: any) => chunk.maps)
+        ?.map((chunk: any) => ({
+          uri: chunk.maps.uri,
+          title: chunk.maps.title
+        })) || [];
+
       setTimeout(() => {
-        setReport(result);
+        setReport({ ...result, mapsLinks });
         setIsScanning(false);
         setScanProgress(100);
       }, 1500);
@@ -328,6 +317,55 @@ export default function App() {
                             <Zap className="w-3 h-3" /> Network Intelligence
                           </h3>
                           <p className="text-sm leading-relaxed text-white/80">{report.carrierInfo}</p>
+                        </div>
+                      </div>
+
+                      <div className="pt-6 border-t border-white/5">
+                        <h3 className="text-xs font-bold text-white/40 uppercase tracking-widest mb-4 flex items-center gap-2">
+                          <MapPin className="w-3 h-3" /> Geographic Location
+                        </h3>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                          <div className="space-y-3">
+                            <div className="p-4 bg-black border border-white/5 rounded-lg">
+                              <div className="text-[10px] text-white/40 uppercase mb-1">Estimated Location</div>
+                              <div className="text-sm font-bold text-emerald-500">{report.locationName || 'Identifying...'}</div>
+                            </div>
+                            {report.mapsLinks && report.mapsLinks.length > 0 && (
+                              <div className="space-y-2">
+                                <div className="text-[10px] text-white/40 uppercase">Intelligence Sources</div>
+                                {report.mapsLinks.map((link: any, i: number) => (
+                                  <a 
+                                    key={i} 
+                                    href={link.uri} 
+                                    target="_blank" 
+                                    rel="noopener noreferrer"
+                                    className="flex items-center justify-between p-3 bg-white/5 hover:bg-white/10 border border-white/5 rounded-lg transition-colors group"
+                                  >
+                                    <span className="text-xs text-white/80">{link.title || 'View on Google Maps'}</span>
+                                    <Globe className="w-3 h-3 text-emerald-500 group-hover:scale-110 transition-transform" />
+                                  </a>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                          
+                          <div className="aspect-video bg-black border border-white/5 rounded-lg overflow-hidden relative group">
+                            <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,transparent_0%,#000_100%)] z-10 pointer-events-none" />
+                            <img 
+                              src={`https://picsum.photos/seed/${report.locationName || 'map'}/800/450?blur=2`}
+                              alt="Location Visual"
+                              className="w-full h-full object-cover opacity-40 group-hover:scale-105 transition-transform duration-700"
+                              referrerPolicy="no-referrer"
+                            />
+                            <div className="absolute inset-0 flex items-center justify-center z-20">
+                              <div className="flex flex-col items-center gap-2">
+                                <div className="w-10 h-10 rounded-full bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center">
+                                  <MapPin className="w-5 h-5 text-emerald-500" />
+                                </div>
+                                <span className="text-[10px] uppercase tracking-widest text-white/60 font-bold">Area Identified</span>
+                              </div>
+                            </div>
+                          </div>
                         </div>
                       </div>
 
