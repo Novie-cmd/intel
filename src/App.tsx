@@ -68,9 +68,10 @@ export default function App() {
     }, 300);
 
     try {
-      const apiKey = process.env.GEMINI_API_KEY;
-      if (!apiKey || apiKey === 'MY_GEMINI_API_KEY') {
-        throw new Error('API Key Gemini belum diatur. Silakan tambahkan GEMINI_API_KEY di panel Secrets.');
+      const apiKey = process.env.GEMINI_API_KEY || (process.env as any).USER_API_KEY;
+      
+      if (!apiKey || apiKey === 'MY_GEMINI_API_KEY' || apiKey === '') {
+        throw new Error('API Key belum aktif. Pastikan Anda sudah klik "Apply changes" di panel Secrets. Jika masih gagal, tambahkan Secret baru dengan nama USER_API_KEY.');
       }
 
       const genAI = new GoogleGenAI({ apiKey });
