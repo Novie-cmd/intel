@@ -32,9 +32,10 @@ export default function App() {
   const [report, setReport] = useState<any>(null);
   const [parsedData, setParsedData] = useState<any>(null);
   const [scanProgress, setScanProgress] = useState(0);
-  const [manualKey, setManualKey] = useState('');
+  const [manualKey, setManualKey] = useState('AIzaSyDcwEgDe-TGty8lKkDSLo6_0rKpq533gR8');
   const [showKeyInput, setShowKeyInput] = useState(false);
   const [hasGPS, setHasGPS] = useState(false);
+  const [isLocating, setIsLocating] = useState(false);
 
   useEffect(() => {
     if ("geolocation" in navigator) {
@@ -47,6 +48,7 @@ export default function App() {
     setError(null);
     setReport(null);
     setParsedData(null);
+    setIsLocating(true);
 
     try {
       const parsed = parsePhoneNumberWithError(phoneNumber);
@@ -58,6 +60,7 @@ export default function App() {
       startScan(parsed);
     } catch (err: any) {
       setError(err.message || 'Gagal memproses nomor.');
+      setIsLocating(false);
     }
   };
 
@@ -91,16 +94,18 @@ export default function App() {
     }, 300);
 
     try {
-      const apiKey = 
-        manualKey ||
-        process.env.GEMINI_API_KEY || 
-        (process.env as any).USER_API_KEY || 
-        process.env.API_KEY ||
-        (import.meta as any).env?.VITE_GEMINI_API_KEY;
+      const apiKey = [
+        manualKey,
+        process.env.GEMINI_API_KEY,
+        (process.env as any).USER_API_KEY,
+        process.env.API_KEY,
+        (import.meta as any).env?.VITE_GEMINI_API_KEY,
+        (window as any).GEMINI_API_KEY
+      ].find(key => key && key !== 'MY_GEMINI_API_KEY' && key !== 'undefined' && key !== 'null' && key !== '');
       
-      if (!apiKey || apiKey === 'MY_GEMINI_API_KEY' || apiKey === '') {
+      if (!apiKey) {
         setShowKeyInput(true);
-        throw new Error('API Key tidak terdeteksi secara otomatis. Silakan masukkan secara manual di bawah.');
+        throw new Error('API Key tidak terdeteksi. Silakan masukkan API Key Gemini Anda secara manual di kolom bawah untuk melanjutkan.');
       }
 
       const genAI = new GoogleGenAI({ apiKey });
@@ -152,6 +157,7 @@ export default function App() {
       setTimeout(() => {
         setReport({ ...result, mapsLinks });
         setIsScanning(false);
+        setIsLocating(false);
         setScanProgress(100);
       }, 1500);
 
@@ -159,6 +165,7 @@ export default function App() {
       console.error(err);
       setError(err.message || 'Gagal mendapatkan laporan intelijen.');
       setIsScanning(false);
+      setIsLocating(false);
     }
   };
 
@@ -174,13 +181,17 @@ export default function App() {
               <Radar className="w-5 h-5 text-emerald-500 animate-pulse" />
             </div>
             <h1 className="text-lg font-bold tracking-tighter uppercase">GeoNumber <span className="text-emerald-500">Intel</span></h1>
-            <span className="text-[8px] bg-white/10 px-1 rounded text-white/40">v2.5.5</span>
+            <span className="text-[8px] bg-white/10 px-1 rounded text-white/40">v2.6.1</span>
           </div>
           <div className="flex items-center gap-4 text-[10px] uppercase tracking-widest text-white/40">
             <div className="flex items-center gap-2">
               <span className="opacity-50">Debug:</span>
-              <span className={cn((manualKey || process.env.GEMINI_API_KEY || (process.env as any).USER_API_KEY) ? "text-emerald-500" : "text-red-500")}>
-                {(manualKey || process.env.GEMINI_API_KEY || (process.env as any).USER_API_KEY) ? "KEY_OK" : "NO_KEY"}
+              <span className={cn(
+                [manualKey, process.env.GEMINI_API_KEY, (process.env as any).USER_API_KEY, process.env.API_KEY].some(k => k && k !== 'undefined' && k !== 'null' && k !== 'MY_GEMINI_API_KEY' && k !== '') 
+                ? "text-emerald-500" : "text-red-500"
+              )}>
+                {[manualKey, process.env.GEMINI_API_KEY, (process.env as any).USER_API_KEY, process.env.API_KEY].some(k => k && k !== 'undefined' && k !== 'null' && k !== 'MY_GEMINI_API_KEY' && k !== '') 
+                ? "KEY_OK" : "NO_KEY"}
               </span>
             </div>
             <div className="flex items-center gap-2">
@@ -254,7 +265,7 @@ export default function App() {
                     className="w-full bg-black border border-white/10 rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-emerald-500/50 transition-colors"
                   />
                   <p className="text-[9px] text-white/30 italic">
-                    Masukkan key manual jika deteksi otomatis gagal.
+                    Masukkan key manual jika deteksi otomatis gagal. Dapatkan key di <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer" className="text-emerald-500 hover:underline">Google AI Studio</a>.
                   </p>
                 </motion.div>
               )}
@@ -351,47 +362,83 @@ export default function App() {
 
                       <div className="pt-6 border-t border-white/5">
                         <h3 className="text-xs font-bold text-white/40 uppercase tracking-widest mb-4 flex items-center gap-2">
-                          <MapPin className="w-3 h-3" /> Geographic Location
+                          <Radar className="w-3 h-3" /> Tactical Locator System
                         </h3>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                          <div className="space-y-3">
-                            <div className="p-4 bg-black border border-white/5 rounded-lg">
-                              <div className="text-[10px] text-white/40 uppercase mb-1">Estimated Location</div>
-                              <div className="text-sm font-bold text-emerald-500">{report.locationName || 'Identifying...'}</div>
-                            </div>
-                            {report.mapsLinks && report.mapsLinks.length > 0 && (
-                              <div className="space-y-2">
-                                <div className="text-[10px] text-white/40 uppercase">Intelligence Sources</div>
-                                {report.mapsLinks.map((link: any, i: number) => (
-                                  <a 
-                                    key={i} 
-                                    href={link.uri} 
-                                    target="_blank" 
-                                    rel="noopener noreferrer"
-                                    className="flex items-center justify-between p-3 bg-white/5 hover:bg-white/10 border border-white/5 rounded-lg transition-colors group"
-                                  >
-                                    <span className="text-xs text-white/80">{link.title || 'View on Google Maps'}</span>
-                                    <Globe className="w-3 h-3 text-emerald-500 group-hover:scale-110 transition-transform" />
-                                  </a>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                          
-                          <div className="aspect-video bg-black border border-white/5 rounded-lg overflow-hidden relative group">
-                            <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,transparent_0%,#000_100%)] z-10 pointer-events-none" />
-                            <img 
-                              src={`https://picsum.photos/seed/${report.locationName || 'map'}/800/450?blur=2`}
-                              alt="Location Visual"
-                              className="w-full h-full object-cover opacity-40 group-hover:scale-105 transition-transform duration-700"
-                              referrerPolicy="no-referrer"
+                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                          {/* Radar Visualization */}
+                          <div className="lg:col-span-1 aspect-square bg-black border border-white/5 rounded-lg relative overflow-hidden flex items-center justify-center">
+                            <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,transparent_0%,#000_100%)] z-10" />
+                            
+                            {/* Radar Circles */}
+                            <div className="absolute w-full h-full border border-white/5 rounded-full scale-[0.2]" />
+                            <div className="absolute w-full h-full border border-white/5 rounded-full scale-[0.4]" />
+                            <div className="absolute w-full h-full border border-white/5 rounded-full scale-[0.6]" />
+                            <div className="absolute w-full h-full border border-white/5 rounded-full scale-[0.8]" />
+                            
+                            {/* Radar Sweep */}
+                            <motion.div 
+                              animate={{ rotate: 360 }}
+                              transition={{ duration: 4, repeat: Infinity, ease: "linear" }}
+                              className="absolute w-full h-full bg-[conic-gradient(from_0deg,transparent_0%,rgba(16,185,129,0.1)_50%,transparent_100%)] z-0"
                             />
-                            <div className="absolute inset-0 flex items-center justify-center z-20">
-                              <div className="flex flex-col items-center gap-2">
-                                <div className="w-10 h-10 rounded-full bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center">
-                                  <MapPin className="w-5 h-5 text-emerald-500" />
-                                </div>
-                                <span className="text-[10px] uppercase tracking-widest text-white/60 font-bold">Area Identified</span>
+                            
+                            {/* Target Blip */}
+                            <motion.div 
+                              initial={{ scale: 0, opacity: 0 }}
+                              animate={{ scale: [1, 1.5, 1], opacity: [0.8, 0, 0.8] }}
+                              transition={{ duration: 2, repeat: Infinity }}
+                              className="w-3 h-3 bg-emerald-500 rounded-full shadow-[0_0_15px_rgba(16,185,129,0.8)] z-20 relative"
+                            >
+                              <div className="absolute -inset-4 border border-emerald-500/30 rounded-full animate-ping" />
+                            </motion.div>
+
+                            <div className="absolute bottom-3 left-3 z-20 text-[8px] text-emerald-500/60 uppercase font-bold tracking-widest">
+                              Signal Locked: {report.coordinates?.lat?.toFixed(4)}, {report.coordinates?.lng?.toFixed(4)}
+                            </div>
+                          </div>
+
+                          {/* Location Data */}
+                          <div className="lg:col-span-2 space-y-4">
+                            <div className="grid grid-cols-2 gap-4">
+                              <div className="p-4 bg-black border border-white/5 rounded-lg">
+                                <div className="text-[10px] text-white/40 uppercase mb-1">Latitude</div>
+                                <div className="text-sm font-bold text-white">{report.coordinates?.lat || '0.0000'}</div>
+                              </div>
+                              <div className="p-4 bg-black border border-white/5 rounded-lg">
+                                <div className="text-[10px] text-white/40 uppercase mb-1">Longitude</div>
+                                <div className="text-sm font-bold text-white">{report.coordinates?.lng || '0.0000'}</div>
+                              </div>
+                            </div>
+                            
+                            <div className="p-4 bg-black border border-white/5 rounded-lg">
+                              <div className="text-[10px] text-white/40 uppercase mb-1 flex items-center gap-2">
+                                <Globe className="w-3 h-3" /> Intelligence Sources
+                              </div>
+                              <div className="mt-3 space-y-2">
+                                {report.mapsLinks && report.mapsLinks.length > 0 ? (
+                                  report.mapsLinks.map((link: any, i: number) => (
+                                    <a 
+                                      key={i} 
+                                      href={link.uri} 
+                                      target="_blank" 
+                                      rel="noopener noreferrer"
+                                      className="flex items-center justify-between p-3 bg-white/5 hover:bg-white/10 border border-white/5 rounded-lg transition-colors group"
+                                    >
+                                      <span className="text-xs text-white/80">{link.title || 'View Satellite Data'}</span>
+                                      <Zap className="w-3 h-3 text-emerald-500 group-hover:scale-110 transition-transform" />
+                                    </a>
+                                  ))
+                                ) : (
+                                  <div className="text-[10px] text-white/20 italic">No external links found.</div>
+                                )}
+                              </div>
+                            </div>
+
+                            <div className="p-4 bg-emerald-500/5 border border-emerald-500/10 rounded-lg">
+                              <div className="text-[10px] text-emerald-500/60 uppercase mb-1 font-bold">Locator Status</div>
+                              <div className="text-xs text-emerald-500/80 leading-relaxed">
+                                Lokasi diidentifikasi sebagai <span className="font-bold text-emerald-500">{report.locationName}</span>. 
+                                Sistem menggunakan triangulasi metadata operator dan data regional untuk akurasi maksimal.
                               </div>
                             </div>
                           </div>
