@@ -32,6 +32,8 @@ export default function App() {
   const [report, setReport] = useState<any>(null);
   const [parsedData, setParsedData] = useState<any>(null);
   const [scanProgress, setScanProgress] = useState(0);
+  const [manualKey, setManualKey] = useState('');
+  const [showKeyInput, setShowKeyInput] = useState(false);
 
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -70,13 +72,15 @@ export default function App() {
     try {
       // Try to get key from multiple sources
       const apiKey = 
+        manualKey ||
         process.env.GEMINI_API_KEY || 
         (process.env as any).USER_API_KEY || 
-        (import.meta as any).env?.VITE_GEMINI_API_KEY ||
-        (window as any).GEMINI_API_KEY;
+        process.env.API_KEY ||
+        (import.meta as any).env?.VITE_GEMINI_API_KEY;
       
       if (!apiKey || apiKey === 'MY_GEMINI_API_KEY' || apiKey === '') {
-        throw new Error('API Key belum aktif (Status: NO_KEY). Pastikan Anda sudah klik "Apply changes" di panel Secrets. Jika masih gagal, tambahkan Secret baru dengan nama USER_API_KEY.');
+        setShowKeyInput(true);
+        throw new Error('API Key tidak terdeteksi secara otomatis. Silakan masukkan secara manual di bawah.');
       }
 
       const genAI = new GoogleGenAI({ apiKey });
@@ -128,13 +132,13 @@ export default function App() {
               <Radar className="w-5 h-5 text-emerald-500 animate-pulse" />
             </div>
             <h1 className="text-lg font-bold tracking-tighter uppercase">GeoNumber <span className="text-emerald-500">Intel</span></h1>
-            <span className="text-[8px] bg-white/10 px-1 rounded text-white/40">v2.5.2</span>
+            <span className="text-[8px] bg-white/10 px-1 rounded text-white/40">v2.5.3</span>
           </div>
           <div className="flex items-center gap-4 text-[10px] uppercase tracking-widest text-white/40">
             <div className="flex items-center gap-2">
               <span className="opacity-50">Debug:</span>
-              <span className={cn((process.env.GEMINI_API_KEY || (process.env as any).USER_API_KEY) ? "text-emerald-500" : "text-red-500")}>
-                {(process.env.GEMINI_API_KEY || (process.env as any).USER_API_KEY) ? "KEY_OK" : "NO_KEY"}
+              <span className={cn((manualKey || process.env.GEMINI_API_KEY || (process.env as any).USER_API_KEY) ? "text-emerald-500" : "text-red-500")}>
+                {(manualKey || process.env.GEMINI_API_KEY || (process.env as any).USER_API_KEY) ? "KEY_OK" : "NO_KEY"}
               </span>
             </div>
             <div className="flex items-center gap-2">
@@ -186,6 +190,28 @@ export default function App() {
                   )}
                 </button>
               </form>
+
+              {showKeyInput && (
+                <motion.div 
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  className="mt-6 pt-6 border-t border-white/5 space-y-3"
+                >
+                  <label className="text-[10px] font-bold text-white/40 uppercase tracking-widest flex items-center gap-2">
+                    <Shield className="w-3 h-3" /> Manual API Key
+                  </label>
+                  <input
+                    type="password"
+                    value={manualKey}
+                    onChange={(e) => setManualKey(e.target.value)}
+                    placeholder="AIzaSy..."
+                    className="w-full bg-black border border-white/10 rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-emerald-500/50 transition-colors"
+                  />
+                  <p className="text-[9px] text-white/30 italic">
+                    Masukkan key manual jika deteksi otomatis gagal.
+                  </p>
+                </motion.div>
+              )}
 
               {error && (
                 <motion.div 
