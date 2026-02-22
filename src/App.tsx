@@ -36,12 +36,29 @@ export default function App() {
   const [showKeyInput, setShowKeyInput] = useState(false);
   const [hasGPS, setHasGPS] = useState(false);
   const [isLocating, setIsLocating] = useState(false);
+  const [isSatelliteLinked, setIsSatelliteLinked] = useState(false);
+  const [signalStrength, setSignalStrength] = useState(0);
+  const [liveCoords, setLiveCoords] = useState<{lat: number, lng: number} | null>(null);
 
   useEffect(() => {
     if ("geolocation" in navigator) {
       navigator.geolocation.getCurrentPosition(() => setHasGPS(true), () => setHasGPS(false));
     }
-  }, []);
+    
+    // Simulate satellite signal fluctuation
+    const sigInterval = setInterval(() => {
+      setSignalStrength(Math.floor(Math.random() * 40) + 60);
+      
+      // If we have a report, simulate slight coordinate drift for "real-time" effect
+      if (liveCoords) {
+        setLiveCoords(prev => prev ? {
+          lat: prev.lat + (Math.random() - 0.5) * 0.0001,
+          lng: prev.lng + (Math.random() - 0.5) * 0.0001
+        } : null);
+      }
+    }, 2000);
+    return () => clearInterval(sigInterval);
+  }, [liveCoords]);
 
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -67,6 +84,8 @@ export default function App() {
   const startScan = async (parsed: any) => {
     setIsScanning(true);
     setScanProgress(0);
+    setIsSatelliteLinked(false);
+    setLiveCoords(null);
 
     // Get user location for better accuracy
     let userLocation = null;
@@ -82,16 +101,17 @@ export default function App() {
       console.warn("Could not get user location:", e);
     }
 
-    // Simulate scanning progress
+    // Simulate scanning progress with Satellite Uplink phase
     const interval = setInterval(() => {
       setScanProgress(prev => {
         if (prev >= 100) {
           clearInterval(interval);
           return 100;
         }
-        return prev + Math.random() * 10;
+        if (prev > 40 && prev < 60) setIsSatelliteLinked(true);
+        return prev + Math.random() * 8;
       });
-    }, 300);
+    }, 250);
 
     try {
       const apiKey = [
@@ -113,13 +133,13 @@ export default function App() {
       // Use Gemini 2.5 Flash for Maps Grounding support
       const response = await genAI.models.generateContent({
         model: "gemini-2.5-flash",
-        contents: `Analyze this phone number for geographic intelligence:
+        contents: `Perform a Real-time Satellite Signal Analysis for this phone number:
           Number: ${parsed.number}
           Country: ${parsed.country}
           Carrier: ${parsed.carrier || 'Unknown'}
           
           Provide a technical intelligence report in Indonesian. 
-          Use the provided user location as a reference point to find the most accurate registration area or nearby infrastructure related to this number.
+          Simulate real-time tracking data by providing precise coordinates and nearby landmarks.
           Return ONLY a JSON object with this structure:
           {
             "summary": "Short overview",
@@ -128,10 +148,12 @@ export default function App() {
             "securityRisk": "Low" | "Medium" | "High",
             "locationName": "City, Province, Country",
             "coordinates": {"lat": 0, "lng": 0},
+            "satelliteId": "SAT-X12-B",
+            "signalQuality": "98%",
             "recommendations": ["tip 1", "tip 2", "tip 3"]
           }`,
         config: {
-          tools: [{ googleMaps: {} }],
+          tools: [{ googleMaps: {} }, { googleSearch: {} }],
           toolConfig: userLocation ? {
             retrievalConfig: {
               latLng: userLocation
@@ -156,6 +178,9 @@ export default function App() {
 
       setTimeout(() => {
         setReport({ ...result, mapsLinks });
+        if (result.coordinates) {
+          setLiveCoords(result.coordinates);
+        }
         setIsScanning(false);
         setIsLocating(false);
         setScanProgress(100);
@@ -181,7 +206,7 @@ export default function App() {
               <Radar className="w-5 h-5 text-emerald-500 animate-pulse" />
             </div>
             <h1 className="text-lg font-bold tracking-tighter uppercase">GeoNumber <span className="text-emerald-500">Intel</span></h1>
-            <span className="text-[8px] bg-white/10 px-1 rounded text-white/40">v2.6.1</span>
+            <span className="text-[8px] bg-white/10 px-1 rounded text-white/40">v2.8.0</span>
           </div>
           <div className="flex items-center gap-4 text-[10px] uppercase tracking-widest text-white/40">
             <div className="flex items-center gap-2">
@@ -201,6 +226,10 @@ export default function App() {
             <div className="flex items-center gap-2">
               <div className={cn("w-1.5 h-1.5 rounded-full animate-pulse", hasGPS ? "bg-blue-500" : "bg-white/20")} />
               {hasGPS ? "GPS Precision" : "GPS Offline"}
+            </div>
+            <div className="flex items-center gap-2">
+              <div className={cn("w-1.5 h-1.5 rounded-full animate-pulse", isSatelliteLinked ? "bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]" : "bg-white/20")} />
+              <span className="hidden sm:inline">Uplink:</span> {isSatelliteLinked ? `SAT-LINK ${signalStrength}%` : "No Satellite"}
             </div>
           </div>
         </div>
@@ -392,27 +421,43 @@ export default function App() {
                               <div className="absolute -inset-4 border border-emerald-500/30 rounded-full animate-ping" />
                             </motion.div>
 
-                            <div className="absolute bottom-3 left-3 z-20 text-[8px] text-emerald-500/60 uppercase font-bold tracking-widest">
-                              Signal Locked: {report.coordinates?.lat?.toFixed(4)}, {report.coordinates?.lng?.toFixed(4)}
+                            <div className="absolute top-3 left-3 z-20 flex items-center gap-2">
+                              <div className="w-1.5 h-1.5 bg-red-500 rounded-full animate-pulse" />
+                              <span className="text-[8px] font-bold text-white/60 uppercase tracking-widest">Live Feed</span>
+                            </div>
+
+                            <div className="absolute bottom-3 left-3 z-20 text-[8px] text-emerald-500/60 uppercase font-bold tracking-widest flex flex-col gap-1">
+                              <div className="flex items-center gap-2">
+                                <div className="w-1 h-1 bg-emerald-500 rounded-full animate-ping" />
+                                <span>Signal Locked: {(liveCoords || report.coordinates)?.lat?.toFixed(6)}, {(liveCoords || report.coordinates)?.lng?.toFixed(6)}</span>
+                              </div>
+                              <div>Satellite: {report.satelliteId || 'SAT-X12-B'} | Quality: {report.signalQuality || '98%'}</div>
+                              <div className="text-emerald-500/40">Mode: Live Satellite Tracking</div>
                             </div>
                           </div>
 
                           {/* Location Data */}
                           <div className="lg:col-span-2 space-y-4">
                             <div className="grid grid-cols-2 gap-4">
-                              <div className="p-4 bg-black border border-white/5 rounded-lg">
-                                <div className="text-[10px] text-white/40 uppercase mb-1">Latitude</div>
-                                <div className="text-sm font-bold text-white">{report.coordinates?.lat || '0.0000'}</div>
+                              <div className="p-4 bg-black border border-white/5 rounded-lg relative overflow-hidden">
+                                <div className="absolute top-0 right-0 p-1">
+                                  <div className="w-1 h-1 bg-emerald-500 rounded-full animate-pulse" />
+                                </div>
+                                <div className="text-[10px] text-white/40 uppercase mb-1">Latitude (Live)</div>
+                                <div className="text-sm font-bold text-white font-mono">{(liveCoords || report.coordinates)?.lat?.toFixed(6) || '0.000000'}</div>
                               </div>
-                              <div className="p-4 bg-black border border-white/5 rounded-lg">
-                                <div className="text-[10px] text-white/40 uppercase mb-1">Longitude</div>
-                                <div className="text-sm font-bold text-white">{report.coordinates?.lng || '0.0000'}</div>
+                              <div className="p-4 bg-black border border-white/5 rounded-lg relative overflow-hidden">
+                                <div className="absolute top-0 right-0 p-1">
+                                  <div className="w-1 h-1 bg-emerald-500 rounded-full animate-pulse" />
+                                </div>
+                                <div className="text-[10px] text-white/40 uppercase mb-1">Longitude (Live)</div>
+                                <div className="text-sm font-bold text-white font-mono">{(liveCoords || report.coordinates)?.lng?.toFixed(6) || '0.000000'}</div>
                               </div>
                             </div>
                             
                             <div className="p-4 bg-black border border-white/5 rounded-lg">
                               <div className="text-[10px] text-white/40 uppercase mb-1 flex items-center gap-2">
-                                <Globe className="w-3 h-3" /> Intelligence Sources
+                                <Globe className="w-3 h-3" /> Satellite Data Stream
                               </div>
                               <div className="mt-3 space-y-2">
                                 {report.mapsLinks && report.mapsLinks.length > 0 ? (
@@ -424,12 +469,15 @@ export default function App() {
                                       rel="noopener noreferrer"
                                       className="flex items-center justify-between p-3 bg-white/5 hover:bg-white/10 border border-white/5 rounded-lg transition-colors group"
                                     >
-                                      <span className="text-xs text-white/80">{link.title || 'View Satellite Data'}</span>
+                                      <div className="flex flex-col">
+                                        <span className="text-xs text-white/80 font-bold">{link.title || 'Satellite Visual'}</span>
+                                        <span className="text-[8px] text-white/30 uppercase">Uplink: Active | Source: Google Maps</span>
+                                      </div>
                                       <Zap className="w-3 h-3 text-emerald-500 group-hover:scale-110 transition-transform" />
                                     </a>
                                   ))
                                 ) : (
-                                  <div className="text-[10px] text-white/20 italic">No external links found.</div>
+                                  <div className="text-[10px] text-white/20 italic">No satellite data stream available.</div>
                                 )}
                               </div>
                             </div>
